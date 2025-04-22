@@ -5,7 +5,7 @@ import os
 N_TRAIN_EPISODES = 100
 N_VAL_EPISODES = 100
 
-EPISODE_LENGTH = 10
+EPISODE_LENGTH = 9
 
 
 def create_fake_episode(path):

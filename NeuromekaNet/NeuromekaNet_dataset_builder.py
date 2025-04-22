@@ -6,13 +6,12 @@ import tensorflow as tf
 import tensorflow_datasets as tfds
 import tensorflow_hub as hub
 
-
-class ExampleDataset(tfds.core.GeneratorBasedBuilder):
+class NeuromekaNet(tfds.core.GeneratorBasedBuilder):
     """DatasetBuilder for example dataset."""
 
-    VERSION = tfds.core.Version('1.0.0')
+    VERSION = tfds.core.Version('0.0.1')
     RELEASE_NOTES = {
-      '1.0.0': 'Initial release.',
+      '0.0.1': 'Initial release.',
     }
 
     def __init__(self, *args, **kwargs):
@@ -26,29 +25,21 @@ class ExampleDataset(tfds.core.GeneratorBasedBuilder):
                 'steps': tfds.features.Dataset({
                     'observation': tfds.features.FeaturesDict({
                         'image': tfds.features.Image(
-                            shape=(64, 64, 3),
+                            shape=(256, 256, 3),
                             dtype=np.uint8,
                             encoding_format='png',
                             doc='Main camera RGB observation.',
                         ),
-                        'wrist_image': tfds.features.Image(
-                            shape=(64, 64, 3),
-                            dtype=np.uint8,
-                            encoding_format='png',
-                            doc='Wrist camera RGB observation.',
-                        ),
                         'state': tfds.features.Tensor(
-                            shape=(10,),
+                            shape=(6,),
                             dtype=np.float32,
-                            doc='Robot state, consists of [7x robot joint angles, '
-                                '2x gripper position, 1x door opening angle].',
+                            doc='Robot state, consists of [6x robot joint angles].',
                         )
                     }),
                     'action': tfds.features.Tensor(
-                        shape=(10,),
+                        shape=(7,),
                         dtype=np.float32,
-                        doc='Robot action, consists of [7x joint velocities, '
-                            '2x gripper velocities, 1x terminate episode].',
+                        doc='Robot action, consists of [6x EEF system, 1xghost_gripper, 1x terminate episode]',
                     ),
                     'discount': tfds.features.Scalar(
                         dtype=np.float32,
@@ -90,8 +81,8 @@ class ExampleDataset(tfds.core.GeneratorBasedBuilder):
     def _split_generators(self, dl_manager: tfds.download.DownloadManager):
         """Define data splits."""
         return {
-            'train': self._generate_examples(path='data/train/episode_*.npy'),
-            'val': self._generate_examples(path='data/val/episode_*.npy'),
+            'train': self._generate_examples(path='data/train/episode_*.npy')
+            ,'val': self._generate_examples(path='data/val/episode_*.npy')
         }
 
     def _generate_examples(self, path) -> Iterator[Tuple[str, Any]]:
@@ -110,19 +101,17 @@ class ExampleDataset(tfds.core.GeneratorBasedBuilder):
                 episode.append({
                     'observation': {
                         'image': step['image'],
-                        'wrist_image': step['wrist_image'],
-                        'state': step['state'],
+                        'state': step['state']
                     },
                     'action': step['action'],
                     'discount': 1.0,
-                    'reward': float(i == (len(data) - 1)),
-                    'is_first': i == 0,
-                    'is_last': i == (len(data) - 1),
-                    'is_terminal': i == (len(data) - 1),
+                    'reward': float(step['reward']),
+                    'is_first': step['first'],
+                    'is_last': step['reward'],
+                    'is_terminal': step['reward'],
                     'language_instruction': step['language_instruction'],
                     'language_embedding': language_embedding,
                 })
-                print(len(data))
 
             # create output data sample
             sample = {
@@ -139,13 +128,13 @@ class ExampleDataset(tfds.core.GeneratorBasedBuilder):
         episode_paths = glob.glob(path)
 
         # for smallish datasets, use single-thread parsing
-        for sample in episode_paths:
-            yield _parse_example(sample)
+        # for sample in episode_paths:
+        #     yield _parse_example(sample)
 
         # for large datasets use beam to parallelize data parsing (this will have initialization overhead)
-        # beam = tfds.core.lazy_imports.apache_beam
-        # return (
-        #         beam.Create(episode_paths)
-        #         | beam.Map(_parse_example)
-        # )
+        beam = tfds.core.lazy_imports.apache_beam
+        return (
+                beam.Create(episode_paths)
+                | beam.Map(_parse_example)
+        )
 
